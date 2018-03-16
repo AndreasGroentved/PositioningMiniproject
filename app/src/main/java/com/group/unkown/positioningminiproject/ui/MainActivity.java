@@ -37,6 +37,7 @@ import com.kontakt.sdk.android.common.profile.IBeaconRegion;
 import com.kontakt.sdk.android.common.profile.IEddystoneDevice;
 import com.kontakt.sdk.android.common.profile.IEddystoneNamespace;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -61,7 +62,9 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         mLocationHandler = new LocationHandler();
         mLocationStrengths = new ArrayList<>();
+        InputStream ins = getResources().openRawResource(getResources().getIdentifier("beacons", "raw", getPackageName()));
 
+        new BuildingModel(ins);
 
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
@@ -136,14 +139,15 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private void centerOnLocation(LatLng latLng) {
         if (latLng == null || !isMapReady) return;
-        float zoomLevel = map.getCameraPosition().zoom;
+        float zoomLevel =/* map.getCameraPosition().zoom;*/ 19f;
+        
         map.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoomLevel));
     }
 
 
     private void drawMarker(LatLng marker) {
         if (!isMapReady) return;
-        map.clear();
+      /*  map.clear();*/
         map.addMarker(new MarkerOptions().position(marker));
     }
 
@@ -205,10 +209,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         return new SimpleIBeaconListener() {
             @Override
             public void onIBeaconDiscovered(IBeaconDevice ibeacon, IBeaconRegion region) {
-                Log.i("Sample", "IBeacon discovered: " + ibeacon.toString());
+                Log.i("Sample", "IBeacon discovered: " + ibeacon.getUniqueId());
 
-                Beacon beacon = BuildingModel.getBeacon(ibeacon.getName());
-
+                Beacon beacon = BuildingModel.getBeacon(ibeacon.getUniqueId());
+                Log.i("found", "" + (BuildingModel.getBeacon(ibeacon.getUniqueId()) != null));
+                if (beacon == null) return;
                 LocationStrength locationStrength = new LocationStrength(new LatLng(beacon.getLatitude(), beacon.getLongitude()), (float) ibeacon.getRssi());
 
                 synchronized (this) {
@@ -216,14 +221,17 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 }
 
                 current = mLocationHandler.getNearestNeighbor(mLocationStrengths);
+                Log.i("sup", "current bt position " + current.latitude + "," + current.longitude);
+                centerOnLocation(current);
+                drawMarker(current);
             }
 
             @Override
             public void onIBeaconLost(IBeaconDevice ibeacon, IBeaconRegion region) {
                 Log.i("Sample", "IBeacon lost: " + ibeacon.toString());
 
-                Beacon beacon = BuildingModel.getBeacon(ibeacon.getName());
-
+                Beacon beacon = BuildingModel.getBeacon(ibeacon.getUniqueId());
+                if (beacon == null) return;
                 LocationStrength locationStrength = new LocationStrength(new LatLng(beacon.getLatitude(), beacon.getLongitude()), (float) ibeacon.getRssi());
 
                 synchronized (this) {

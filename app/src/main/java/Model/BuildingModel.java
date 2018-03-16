@@ -1,5 +1,8 @@
 package Model;
 
+import android.support.annotation.Nullable;
+import android.util.Log;
+
 import com.google.gson.Gson;
 
 import java.io.FileNotFoundException;
@@ -33,12 +36,14 @@ public class BuildingModel {
 
         for (Beacon beacon : beaconArray) {
             beacons.put(beacon.getAlias(), beacon);
+            Log.i("Beacon", beacon.getAlias());
         }
+
 
     }
 
-    public static Beacon getBeacon(String alias) {
-        if(beacons.containsKey(alias)) {
+    public static Beacon getBeacon(@Nullable String alias) {
+        if (beacons.containsKey(alias)) {
             return beacons.get(alias);
         } else {
             return null;
