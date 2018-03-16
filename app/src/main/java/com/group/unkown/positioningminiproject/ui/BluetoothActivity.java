@@ -32,7 +32,7 @@ public class BluetoothActivity extends AppCompatActivity {
     private boolean mScanning;
     private Handler mHandler;
 
-    private static final long SCAN_PERIOD = 10000;
+    private static final long SCAN_PERIOD = 100000;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -54,12 +54,12 @@ public class BluetoothActivity extends AppCompatActivity {
             startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
         }
 
-        scanDevices(true);
-
         InputStream ins = getResources().openRawResource(getResources().getIdentifier("beacons", "raw", getPackageName()));
         BuildingModel model = new BuildingModel(ins);
 
         ((TextView)findViewById(R.id.tv_text)).setText((model.getBeacon("f7826da6-4fa2-4e98-8024-bc5b71e0893e").getRoomName()));
+        
+        scanDevices(true);
     }
 
     private void scanDevices(final boolean enable) {
@@ -70,9 +70,11 @@ public class BluetoothActivity extends AppCompatActivity {
                 public void run() {
                     mScanning = false;
                     mBluetoothAdapter.getBluetoothLeScanner().stopScan(mLeScanCallback);
+                    appendToTextView("Stopped Scan");
                 }
             }, SCAN_PERIOD);
 
+            appendToTextView("Started Scan");
             mScanning = true;
             mBluetoothAdapter.getBluetoothLeScanner().startScan(mLeScanCallback);
         } else {
@@ -87,6 +89,7 @@ public class BluetoothActivity extends AppCompatActivity {
         public void onScanResult(int callbackType, ScanResult result) {
             synchronized (BluetoothActivity.this) {
                 mDevices.add(result);
+                appendToTextView(result.getDevice().toString());
             }
             result.getDevice().connectGatt(BluetoothActivity.this, true, mBluetoothGattCallback);
         }
@@ -123,5 +126,10 @@ public class BluetoothActivity extends AppCompatActivity {
             }
         }
     };
+
+    private void appendToTextView(String text) {
+        TextView tv = findViewById(R.id.tv_text);
+        tv.append(String.format("\n" + text));
+    }
 
 }
