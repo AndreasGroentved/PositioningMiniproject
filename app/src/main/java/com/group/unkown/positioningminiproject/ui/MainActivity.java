@@ -23,6 +23,8 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.group.unkown.positioningminiproject.R;
+import com.group.unkown.positioningminiproject.domain.LocationHandler;
+import com.group.unkown.positioningminiproject.domain.LocationStrength;
 import com.kontakt.sdk.android.ble.connection.OnServiceReadyListener;
 import com.kontakt.sdk.android.ble.manager.ProximityManager;
 import com.kontakt.sdk.android.ble.manager.ProximityManagerFactory;
@@ -36,6 +38,12 @@ import com.kontakt.sdk.android.common.profile.IBeaconRegion;
 import com.kontakt.sdk.android.common.profile.IEddystoneDevice;
 import com.kontakt.sdk.android.common.profile.IEddystoneNamespace;
 
+import java.util.ArrayList;
+import java.util.List;
+
+import Model.Beacon;
+import Model.BuildingModel;
+
 public class MainActivity extends AppCompatActivity implements OnMapReadyCallback {
 
     private GoogleMap map;
@@ -45,10 +53,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     public static final int MY_PERMISSIONS_REQUEST_LOCATION = 99;
     private static final int REQUEST_ENABLE_BT = 1;
     private LocationManager lm;
+    private LocationHandler mLocationHandler;
+    private List<LocationStrength> mLocationStrengths;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        mLocationHandler = new LocationHandler();
+        mLocationStrengths = new ArrayList<>();
 
         listen();
 
@@ -194,6 +206,31 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             @Override
             public void onIBeaconDiscovered(IBeaconDevice ibeacon, IBeaconRegion region) {
                 Log.i("Sample", "IBeacon discovered: " + ibeacon.toString());
+
+                Beacon beacon = BuildingModel.getBeacon(ibeacon.getName());
+
+                LocationStrength locationStrength = new LocationStrength(new LatLng(beacon.getLatitude(), beacon.getLongitude()), (float) ibeacon.getRssi());
+
+                synchronized (this) {
+                    mLocationStrengths.add(locationStrength);
+                }
+
+                mLocationHandler.getNearestNeighbor(mLocationStrengths);
+            }
+
+            @Override
+            public void onIBeaconLost(IBeaconDevice ibeacon, IBeaconRegion region) {
+                Log.i("Sample", "IBeacon lost: " + ibeacon.toString());
+
+                Beacon beacon = BuildingModel.getBeacon(ibeacon.getName());
+
+                LocationStrength locationStrength = new LocationStrength(new LatLng(beacon.getLatitude(), beacon.getLongitude()), (float) ibeacon.getRssi());
+
+                synchronized (this) {
+                    mLocationStrengths.remove(locationStrength);
+                }
+
+                mLocationHandler.getNearestNeighbor(mLocationStrengths);
             }
         };
     }

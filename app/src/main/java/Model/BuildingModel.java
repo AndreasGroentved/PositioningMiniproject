@@ -15,7 +15,7 @@ import java.util.Map;
 
 public class BuildingModel {
 
-    private Map<String, Beacon> beacons = new HashMap<>();
+    private static Map<String, Beacon> beacons = new HashMap<>();
 
     public BuildingModel(InputStream ins) {
 
@@ -37,7 +37,7 @@ public class BuildingModel {
 
     }
 
-    public Beacon getBeacon(String alias) {
+    public static Beacon getBeacon(String alias) {
         if(beacons.containsKey(alias)) {
             return beacons.get(alias);
         } else {

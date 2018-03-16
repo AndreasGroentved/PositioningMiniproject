@@ -11,7 +11,7 @@ public class Beacon {
     private int major;
     private int minor;
     private double latitude;
-    private double longiitude;
+    private double longitude;
     private String instanceId;
     private String room;
     private String level;
@@ -37,8 +37,8 @@ public class Beacon {
         return latitude;
     }
 
-    public double getLongiitude() {
-        return longiitude;
+    public double getLongitude() {
+        return longitude;
     }
 
     public String getInstanceId() {
