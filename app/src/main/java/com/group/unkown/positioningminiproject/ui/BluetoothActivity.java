@@ -11,7 +11,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.ParcelUuid;
 import android.support.v7.app.AppCompatActivity;
+import android.view.View;
 import android.widget.TextView;
 
 import com.group.unkown.positioningminiproject.R;
@@ -58,7 +60,7 @@ public class BluetoothActivity extends AppCompatActivity {
         BuildingModel model = new BuildingModel(ins);
 
         ((TextView)findViewById(R.id.tv_text)).setText((model.getBeacon("f7826da6-4fa2-4e98-8024-bc5b71e0893e").getRoomName()));
-        
+
         scanDevices(true);
     }
 
@@ -83,24 +85,43 @@ public class BluetoothActivity extends AppCompatActivity {
         }
     }
 
+    public void startScan(View view) {
+        ((TextView)findViewById(R.id.tv_text)).setText("");
+        scanDevices(true);
+    }
+
     private ScanCallback mLeScanCallback = new ScanCallback() {
 
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
-            synchronized (BluetoothActivity.this) {
-                mDevices.add(result);
-                appendToTextView(result.getDevice().toString());
+            if (!mDevices.contains(result)) {
+                synchronized (BluetoothActivity.this) {
+                    mDevices.add(result);
+                    /*ParcelUuid[] uuids = result.getDevice().getUuids();
+                    StringBuilder sb = new StringBuilder();
+                    sb.append(result.getDevice().toString()).append(" ");
+                    sb.append(result.getRssi()).append(" ");
+                    if (uuids != null) {
+                        for (ParcelUuid uuid : uuids) {
+                            sb.append(uuid.getUuid()).append(" ");
+                        }
+                    }
+                    appendToTextView(sb.toString());*/
+                }
+                result.getDevice().connectGatt(BluetoothActivity.this, true, mBluetoothGattCallback);
             }
-            result.getDevice().connectGatt(BluetoothActivity.this, true, mBluetoothGattCallback);
         }
 
         @Override
         public void onBatchScanResults(List<ScanResult> results) {
             for (ScanResult result : results) {
-                synchronized (BluetoothActivity.this) {
-                    mDevices.add(result);
+                if (!mDevices.contains(result)) {
+                    synchronized (BluetoothActivity.this) {
+                        mDevices.add(result);
+                        appendToTextView(result.getDevice().toString());
+                    }
+                    result.getDevice().connectGatt(BluetoothActivity.this, true, mBluetoothGattCallback);
                 }
-                result.getDevice().connectGatt(BluetoothActivity.this, true, mBluetoothGattCallback);
             }
         }
 
@@ -112,15 +133,22 @@ public class BluetoothActivity extends AppCompatActivity {
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
             switch (newState) {
                 case BluetoothProfile.STATE_CONNECTED:
-                    synchronized (BluetoothActivity.this) {
-                        mConnections.add(gatt);
+                    if (!mConnections.contains(gatt)) {
+                        synchronized (BluetoothActivity.this) {
+                            mConnections.add(gatt);
+                        }
+                        StringBuilder sb = new StringBuilder();
+                        sb.append("Connected ").append(gatt.getDevice());
+                        appendToTextView(sb.toString());
                     }
                     break;
 
                 case BluetoothProfile.STATE_DISCONNECTED:
-                    synchronized (BluetoothActivity.this) {
-                        mConnections.remove(gatt);
-                        mDevices.remove(gatt.getDevice());
+                    if (mConnections.contains(gatt)) {
+                        synchronized (BluetoothActivity.this) {
+                            mConnections.remove(gatt);
+                            //mDevices.remove(gatt.getDevice());
+                        }
                     }
                     break;
             }
@@ -129,7 +157,7 @@ public class BluetoothActivity extends AppCompatActivity {
 
     private void appendToTextView(String text) {
         TextView tv = findViewById(R.id.tv_text);
-        tv.append(String.format("\n" + text));
+        tv.append(String.format("\n\n" + text));
     }
 
 }

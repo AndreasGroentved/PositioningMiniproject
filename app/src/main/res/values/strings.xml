@@ -1,3 +1,4 @@
 <resources>
-    <string name="app_name">PositioningMiniproject</string>
+    <string name="app_name">Positioning</string>
+    <string name="btn_scan_name">Scan</string>
 </resources>
