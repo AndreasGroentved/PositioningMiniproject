@@ -1,19 +1,18 @@
 package com.group.unkown.positioningminiproject.ui;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
-import android.provider.Settings;
+import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.util.Log;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -55,6 +54,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private LocationManager lm;
     private LocationHandler mLocationHandler;
     private List<LocationStrength> mLocationStrengths;
+    private LatLng current;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,7 +62,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mLocationHandler = new LocationHandler();
         mLocationStrengths = new ArrayList<>();
 
-        listen();
 
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
@@ -127,6 +126,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         Log.i("sup", "permissions enabled");
         KontaktSDK.initialize(this);
 
+        listen();
         proximityManager = ProximityManagerFactory.create(this);
         proximityManager.setIBeaconListener(createIBeaconListener());
         proximityManager.setEddystoneListener(createEddystoneListener());
@@ -215,7 +215,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     mLocationStrengths.add(locationStrength);
                 }
 
-                mLocationHandler.getNearestNeighbor(mLocationStrengths);
+                current = mLocationHandler.getNearestNeighbor(mLocationStrengths);
             }
 
             @Override
@@ -230,7 +230,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     mLocationStrengths.remove(locationStrength);
                 }
 
-                mLocationHandler.getNearestNeighbor(mLocationStrengths);
+                current = mLocationHandler.getNearestNeighbor(mLocationStrengths);
             }
         };
     }
@@ -250,26 +250,20 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         @Override
         public void onLocationChanged(Location location) {
-
-            // lat = location.getLatitude();
-            //lng = location.getLongitude();
-
+            current = new LatLng(location.getLatitude(), location.getLongitude());
         }
 
 
         @Override
         public void onStatusChanged(String s, int i, Bundle bundle) {
-
         }
 
         @Override
         public void onProviderEnabled(String s) {
-
         }
 
         @Override
         public void onProviderDisabled(String s) {
-
         }
     };
 
@@ -279,55 +273,24 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     protected boolean check() {
-
         if (!pickGps()) {
-            showAlert();
+            Log.i("sup", "GPS not available");
         }
-
         return pickGps();
     }
 
+    @SuppressLint("MissingPermission")
     protected void listen() {
 
         if (!check()) {
             return;
-        } else {
-            Location l = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            if (l != null) {
-                //lat = l.getLatitude();
-                //lng = l.getLongitude();
-            }
-
-            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 4000, 0, ll);
+        }
+        Location l = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+        if (l != null) {
+            current = new LatLng(l.getLatitude(), l.getLongitude());
         }
 
-    }
-
-    protected void showAlert() {
-        final AlertDialog.Builder dialog = new AlertDialog.Builder(this);
-        dialog.setTitle("Enable Location")
-                .setMessage("Your Locations Settings is set to 'Off'.\nPlease Enable Location to " +
-                        "use this app")
-                .
-
-                        setPositiveButton("Location Settings", new
-                                DialogInterface.OnClickListener() {
-                                    @Override
-                                    public void onClick(DialogInterface paramDialogInterface, int paramInt) {
-                                        Intent myIntent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-                                        startActivity(myIntent);
-                                    }
-                                })
-
-                .
-
-                        setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
-                            @Override
-                            public void onClick(DialogInterface paramDialogInterface, int paramInt) {
-                            }
-                        });
-        dialog.show();
-
+        lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, ll);
     }
 }
 
