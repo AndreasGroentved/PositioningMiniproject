@@ -1,9 +1,40 @@
 package com.group.unkown.positioningminiproject.ui;
 
+import android.Manifest;
+import android.content.Context;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.provider.Settings;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MarkerOptions;
 import com.group.unkown.positioningminiproject.R;
+import com.kontakt.sdk.android.ble.connection.OnServiceReadyListener;
+import com.kontakt.sdk.android.ble.manager.ProximityManager;
+import com.kontakt.sdk.android.ble.manager.ProximityManagerFactory;
+import com.kontakt.sdk.android.ble.manager.listeners.EddystoneListener;
+import com.kontakt.sdk.android.ble.manager.listeners.IBeaconListener;
+import com.kontakt.sdk.android.ble.manager.listeners.simple.SimpleEddystoneListener;
+import com.kontakt.sdk.android.ble.manager.listeners.simple.SimpleIBeaconListener;
+import com.kontakt.sdk.android.common.KontaktSDK;
+import com.kontakt.sdk.android.common.profile.IBeaconDevice;
+import com.kontakt.sdk.android.common.profile.IBeaconRegion;
+import com.kontakt.sdk.android.common.profile.IEddystoneDevice;
+import com.kontakt.sdk.android.common.profile.IEddystoneNamespace;
 
 public class MainActivity extends AppCompatActivity implements OnMapReadyCallback {
 
@@ -13,12 +44,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static final int REQUEST_INTERNET = 200;
     public static final int MY_PERMISSIONS_REQUEST_LOCATION = 99;
     private static final int REQUEST_ENABLE_BT = 1;
+    private LocationManager lm;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
 
-        permission();
         listen();
 
         super.onCreate(savedInstanceState);
@@ -175,12 +206,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             }
         };
     }
-}
 
-        }
-
-
-    }
 
     private final LocationListener ll = new LocationListener() {
 
@@ -188,11 +214,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         @Override
         public void onLocationChanged(Location location) {
 
-            lat = location.getLatitude();
-            lng = location.getLongitude();
-
-            latView.setText("lat " + lat);
-            lngView.setText("lng " + lng);
+            // lat = location.getLatitude();
+            //lng = location.getLongitude();
 
         }
 
@@ -220,7 +243,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     protected boolean check() {
 
-        if(!pickGps())  {
+        if (!pickGps()) {
             showAlert();
         }
 
@@ -229,18 +252,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     protected void listen() {
 
-        if(!check())  {
+        if (!check()) {
             return;
-        }
-
-        else {
+        } else {
             Location l = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            if(l != null){
-                lat = l.getLatitude();
-                lng = l.getLongitude();
+            if (l != null) {
+                //lat = l.getLatitude();
+                //lng = l.getLongitude();
             }
 
-            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER,4000,0,ll);
+            lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 4000, 0, ll);
         }
 
     }
