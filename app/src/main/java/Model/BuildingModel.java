@@ -32,14 +32,14 @@ public class BuildingModel {
         }
 
         for (Beacon beacon : beaconArray) {
-            beacons.put(beacon.getUUID(), beacon);
+            beacons.put(beacon.getAlias(), beacon);
         }
 
     }
 
-    public Beacon getBeacon(String UUID) {
-        if(beacons.containsKey(UUID)) {
-            return beacons.get(UUID);
+    public Beacon getBeacon(String alias) {
+        if(beacons.containsKey(alias)) {
+            return beacons.get(alias);
         } else {
             return null;
         }
