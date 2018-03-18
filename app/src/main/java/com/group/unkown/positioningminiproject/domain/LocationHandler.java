@@ -16,7 +16,7 @@ import java.util.List;
 
 public final class LocationHandler {
 
-    public static final int DEFAULT_N = 3;
+    public static final int DEFAULT_N = 2;
 
     @Nullable
     public LocationInfo getNearestNeighbor(@NonNull List<LocationStrength> dbs) {

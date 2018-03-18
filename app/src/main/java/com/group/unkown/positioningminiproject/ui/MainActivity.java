@@ -33,7 +33,6 @@ import com.kontakt.sdk.android.ble.manager.ProximityManagerFactory;
 import com.kontakt.sdk.android.ble.manager.listeners.EddystoneListener;
 import com.kontakt.sdk.android.ble.manager.listeners.IBeaconListener;
 import com.kontakt.sdk.android.ble.manager.listeners.simple.SimpleEddystoneListener;
-import com.kontakt.sdk.android.ble.manager.listeners.simple.SimpleIBeaconListener;
 import com.kontakt.sdk.android.common.KontaktSDK;
 import com.kontakt.sdk.android.common.profile.IBeaconDevice;
 import com.kontakt.sdk.android.common.profile.IBeaconRegion;
@@ -58,7 +57,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static final int REQUEST_BT = 1;
     private LocationManager lm;
     private static final float DEFAULT_ZOOM_LEVEL = 19f;
-    private LocationHandler mLocationHandler;
+    private LocationHandler locationHandler;
     private List<LocationStrength> locationStrengths;
     private LatLng currentBtPosition;
     private LatLng currentGpsPosition;
@@ -68,7 +67,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
-        mLocationHandler = new LocationHandler();
+        locationHandler = new LocationHandler();
         locationStrengths = new ArrayList<>();
         InputStream ins = getResources().openRawResource(getResources().getIdentifier("beacons", "raw", getPackageName()));
 
@@ -195,31 +194,37 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private IBeaconListener createIBeaconListener() {
-        return new SimpleIBeaconListener() {
+
+        return new IBeaconListener() {
             @Override
             public void onIBeaconDiscovered(IBeaconDevice ibeacon, IBeaconRegion region) {
                 Log.i(LOG_STRING, "IBeacon discovered: " + ibeacon.getUniqueId());
                 Log.i(LOG_STRING, "" + (BuildingModel.getBeacon(ibeacon.getUniqueId()) != null));
-                updateBtLocations(ibeacon, false);
+            }
+
+            @Override
+            public void onIBeaconsUpdated(List<IBeaconDevice> iBeacons, IBeaconRegion region) {
+                updateBtLocations(iBeacons);
             }
 
             @Override
             public void onIBeaconLost(IBeaconDevice ibeacon, IBeaconRegion region) {
                 Log.i(LOG_STRING, "IBeacon lost: " + ibeacon.toString());
-                updateBtLocations(ibeacon, true);
             }
         };
     }
 
-    private void updateBtLocations(IBeaconDevice ibeacon, boolean remove) {
-        Beacon beacon = BuildingModel.getBeacon(ibeacon.getUniqueId());
-        if (beacon != null) {
-            LocationStrength locationStrength = new LocationStrength(new LatLng(beacon.getLatitude(), beacon.getLongitude()), (float) ibeacon.getRssi());
-            if (remove) removeBeacon(beacon.getLatitude(), beacon.getLongitude());
-            else locationStrengths.add(locationStrength);
+    private void updateBtLocations(List<IBeaconDevice> iBeacons) {
+        List<LocationStrength> beacons = new ArrayList<>();
+        for (IBeaconDevice iBeaconDevice : iBeacons) {
+            Beacon beacon = BuildingModel.getBeacon(iBeaconDevice.getUniqueId());
+            if (beacon != null) {
+                LocationStrength locationStrength = new LocationStrength(new LatLng(beacon.getLatitude(), beacon.getLongitude()), (float) iBeaconDevice.getRssi());
+                beacons.add(locationStrength);
+            }
         }
 
-        LocationInfo locationInfo = mLocationHandler.getNearestNeighbor(locationStrengths);
+        LocationInfo locationInfo = locationHandler.getNearestNeighbor(beacons);
 
         if (locationInfo == null) {
             Log.i(LOG_STRING, "no bluetooth positions");
