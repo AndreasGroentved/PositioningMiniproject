@@ -5,6 +5,7 @@ import android.support.annotation.Nullable;
 
 import com.google.android.gms.maps.model.LatLng;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -18,17 +19,23 @@ public final class LocationHandler {
     public static final int DEFAULT_N = 3;
 
     @Nullable
-    public LatLng getNearestNeighbor(@NonNull List<LocationStrength> dbs) {
+    public LocationInfo getNearestNeighbor(@NonNull List<LocationStrength> dbs) {
         return getNearestNeighbor(DEFAULT_N, dbs);
     }
 
     @Nullable
-    public LatLng getNearestNeighbor(int n, @NonNull List<LocationStrength> dbs) {
+    public LocationInfo getNearestNeighbor(int n, @NonNull List<LocationStrength> dbs) {
         if (dbs.isEmpty()) return null;
 
-        Collections.sort(dbs, locationStrengthSorter);
-        if (dbs.size() <= n) n = dbs.size() - 1;
-        List<LocationStrength> nearest = dbs.subList(0, n);
+        List<LocationStrength> filteredList = new ArrayList<>(dbs.size());
+        for (LocationStrength ls : dbs) {
+            if (ls.latLng.longitude != 0) filteredList.add(ls);
+        }
+        if (filteredList.isEmpty()) return null;
+
+        Collections.sort(filteredList, locationStrengthSorter);
+        if (filteredList.size() <= n) n = filteredList.size() - 1;
+        List<LocationStrength> nearest = filteredList.subList(0, n);
 
         double sumLat = 0;
         double sumLng = 0;
@@ -37,7 +44,7 @@ public final class LocationHandler {
             sumLng += loc.latLng.longitude;
         }
 
-        return new LatLng(sumLat / n, sumLng / n);
+        return new LocationInfo(new LatLng(sumLat / n, sumLng / n), n);
     }
 
     private Comparator<LocationStrength> locationStrengthSorter = new Comparator<LocationStrength>() {
