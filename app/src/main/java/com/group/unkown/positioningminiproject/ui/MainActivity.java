@@ -225,8 +225,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             Log.i(LOG_STRING, "no bluetooth positions");
             if (currentGpsPosition == null) Log.i(LOG_STRING, "No available positioning source");
             centerOnLocation(currentGpsPosition);
-            centerOnLocation(currentBtPosition);
-            drawMarker(currentBtPosition, true);
+            drawMarker(currentGpsPosition, true);
             updateInfoViews(0);
             return;
         }
