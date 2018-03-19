@@ -106,11 +106,11 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         File logFile = new File(Environment.getExternalStorageDirectory(), fileName);
 
         try {
-            logFileOutputStream = new FileOutputStream(logFile, true);
+            logFileOutputStream = openFileOutput(fileName, Context.MODE_APPEND);
+            Log.i(LOG_STRING, "File: " + logFile);
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
-
 
         if (!permissionsGranted()) askPermissions();
 
@@ -124,6 +124,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     append(locationInfo.latLng.latitude + "").append(",").
                     append(locationInfo.latLng.longitude + "").append("\n");
             logFileOutputStream.write(sb.toString().getBytes());
+            logFileOutputStream.flush();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -313,8 +314,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (locationInfo == null) {
             Log.i(LOG_STRING, "no bluetooth positions");
             if (currentGpsPosition == null) Log.i(LOG_STRING, "No available positioning source");
-            drawMarker(new LocationInfo(currentGpsPosition, 0), LocationType.GPS);
-            updateInfoViews(0);
             return;
         }
         currentBtPosition = locationInfo.latLng;
