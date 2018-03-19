@@ -30,6 +30,8 @@ import com.group.unkown.positioningminiproject.R;
 import com.group.unkown.positioningminiproject.domain.LocationHandler;
 import com.group.unkown.positioningminiproject.domain.LocationInfo;
 import com.group.unkown.positioningminiproject.domain.LocationStrength;
+import com.group.unkown.positioningminiproject.model.Beacon;
+import com.group.unkown.positioningminiproject.model.BuildingModel;
 import com.kontakt.sdk.android.ble.connection.OnServiceReadyListener;
 import com.kontakt.sdk.android.ble.manager.ProximityManager;
 import com.kontakt.sdk.android.ble.manager.ProximityManagerFactory;
@@ -42,6 +44,8 @@ import com.kontakt.sdk.android.common.profile.IBeaconRegion;
 import com.kontakt.sdk.android.common.profile.IEddystoneDevice;
 import com.kontakt.sdk.android.common.profile.IEddystoneNamespace;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -103,10 +107,15 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         btCountView = findViewById(R.id.number_of_bluetooth_beacons);
         currentlyUsingView = findViewById(R.id.currently_using);
 
-        File logFile = new File(Environment.getExternalStorageDirectory(), fileName);
+        String root = Environment.getExternalStorageDirectory().toString();
+        File myDir = new File(root + "/positioning");
+        myDir.mkdirs();
+
+        String fname = "tst.csv";
+        File file = new File(myDir, fname);
 
         try {
-            logFileOutputStream = new FileOutputStream(logFile, true);
+            logFileOutputStream = new FileOutputStream(file, true);
         } catch (FileNotFoundException e) {
             e.printStackTrace();
         }
@@ -117,6 +126,15 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void logLocation(LocationInfo locationInfo, LocationType locationType) {
+
+        String root = Environment.getExternalStorageDirectory().toString();
+        File myDir = new File(root + "/positioning");
+        myDir.mkdirs();
+
+
+        String fname = "tst.csv";
+        File file = new File(myDir, fname);
+
         try {
             StringBuilder sb = new StringBuilder();
             sb.append(Calendar.getInstance().getTime().toString()).append(",").
@@ -127,9 +145,21 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        if (file.exists())
+            file.delete();
+        try {
+
+            logFileOutputStream.flush();
+            logFileOutputStream.close();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void askPermissions() {
+        makePermissionDialog(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
         makePermissionDialog(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_LOCATION);
         makePermissionDialog(new String[]{Manifest.permission.INTERNET}, REQUEST_INTERNET);
         makePermissionDialog(new String[]{Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN}, REQUEST_BT);
@@ -172,7 +202,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         LocationInfo current = mLocationHandler.getNearestNeighbor(new ArrayList<>(locationStrengthMap.values()));
         if (current.latLng == null) return;
         currentLatLng = current;
-        drawMarker(current, LocationType.COMBINED);
+        drawMarker(current.latLng, LocationType.COMBINED);
         updateInfoViews(current.numberOfBeacons);
         if (firstUpdate) {
             centerOnLocation(this.btCountView);
@@ -188,22 +218,22 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
 
-    private void drawMarker(LocationInfo locationInfo, LocationType locationType) {
+    private void drawMarker(LatLng marker, LocationType locationType) {
         if (!isMapReady) return;
         //map.clear();
 
         switch (locationType) {
             case BLE:
-                map.addMarker(new MarkerOptions().position(locationInfo.latLng).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
+                map.addMarker(new MarkerOptions().position(marker).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
                 break;
             case GPS:
-                map.addMarker(new MarkerOptions().position(locationInfo.latLng).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+                map.addMarker(new MarkerOptions().position(marker).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
                 break;
             case COMBINED:
-                map.addMarker(new MarkerOptions().position(locationInfo.latLng).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
+                map.addMarker(new MarkerOptions().position(marker).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
                 break;
         }
-        logLocation(locationInfo, locationType);
+
     }
 
     @Override
@@ -228,12 +258,17 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 == PackageManager.PERMISSION_GRANTED;
     }
 
+    @SuppressWarnings("ResultOfMethodCallIgnored")
     @Override
     protected void onStop() {
         super.onStop();
         if (!permissionsGranted()) {
             return;
         }
+
+       // Log.i("sup", myDir.getAbsolutePath());
+
+
         proximityManager.stopScanning();
 
         try {
@@ -242,6 +277,17 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             e.printStackTrace();
         }
 
+    }
+
+
+    public File getPublicAlbumStorageDir(String albumName) {
+        // Get the directory for the user's public pictures directory.
+        File file = new File(Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS), albumName);
+        if (!file.mkdirs()) {
+            Log.e("s", "Directory not created");
+        }
+        return file;
     }
 
     @Override
@@ -312,14 +358,16 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (locationInfo == null) {
             Log.i(LOG_STRING, "no bluetooth positions");
             if (currentGpsPosition == null) Log.i(LOG_STRING, "No available positioning source");
-            drawMarker(new LocationInfo(currentGpsPosition, 0), LocationType.GPS);
+            drawMarker(currentGpsPosition, LocationType.GPS);
             updateInfoViews(0);
+            logLocation(new LocationInfo(currentGpsPosition,0),LocationType.GPS);
             return;
         }
         currentBtPosition = locationInfo.latLng;
         Log.i(LOG_STRING, "currentBtPosition bt position " + currentBtPosition.latitude + "," + currentBtPosition.longitude);
         updateInfoViews(locationInfo.numberOfBeacons);
-        drawMarker(locationInfo, LocationType.BLE);
+        drawMarker(currentBtPosition, LocationType.BLE);
+        logLocation(new LocationInfo(currentGpsPosition,0),LocationType.BLE);
     }
 
     private void updateInfoViews(int numOfBtDevices) {
@@ -358,7 +406,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             LatLng gpsLatLng = new LatLng(location.getLatitude(), location.getLongitude());
             locationStrengthMap.put(GPS_TAG, new LocationStrength(gpsLatLng, location.getAccuracy() * -1));
             locationUpdate();
-            drawMarker(new LocationInfo(gpsLatLng, 0), LocationType.GPS);
+            drawMarker(new LatLng(location.getLatitude(), location.getLongitude()), LocationType.GPS);
         }
 
         @Override
