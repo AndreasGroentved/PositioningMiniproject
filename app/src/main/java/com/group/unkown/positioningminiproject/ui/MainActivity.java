@@ -10,6 +10,7 @@ import android.location.LocationListener;
 import android.location.LocationManager;
 import android.location.LocationProvider;
 import android.os.Bundle;
+import android.os.Environment;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
@@ -41,11 +42,18 @@ import com.kontakt.sdk.android.common.profile.IBeaconRegion;
 import com.kontakt.sdk.android.common.profile.IEddystoneDevice;
 import com.kontakt.sdk.android.common.profile.IEddystoneNamespace;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.SimpleTimeZone;
 
 import com.group.unkown.positioningminiproject.model.Beacon;
 import com.group.unkown.positioningminiproject.model.BuildingModel;
@@ -57,6 +65,8 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private static final int REQUEST_BT = 1;
     private static final float DEFAULT_ZOOM_LEVEL = 16f;
     private static final String GPS_TAG = "GPS";
+
+    private static final String fileName = "positioning.csv";
 
     private enum LocationType {
         GPS, BLE, COMBINED
@@ -74,6 +84,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     private TextView btCountView;
     private TextView currentlyUsingView;
     private boolean firstUpdate = true;
+    private FileOutputStream logFileOutputStream;
 
     private Map<String, LocationStrength> locationStrengthMap;
     private List<LocationStrength> locationStrengths;
@@ -92,8 +103,30 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         btCountView = findViewById(R.id.number_of_bluetooth_beacons);
         currentlyUsingView = findViewById(R.id.currently_using);
 
+        File logFile = new File(Environment.getExternalStorageDirectory(), fileName);
+
+        try {
+            logFileOutputStream = new FileOutputStream(logFile, true);
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+
+
         if (!permissionsGranted()) askPermissions();
 
+    }
+
+    private void logLocation(LocationInfo locationInfo, LocationType locationType) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            sb.append(Calendar.getInstance().getTime().toString()).append(",").
+                    append(locationType.name()).append(",").
+                    append(locationInfo.latLng.latitude + "").append(",").
+                    append(locationInfo.latLng.longitude + "").append("\n");
+            logFileOutputStream.write(sb.toString().getBytes());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private void askPermissions() {
@@ -139,7 +172,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         LocationInfo current = mLocationHandler.getNearestNeighbor(new ArrayList<>(locationStrengthMap.values()));
         if (current.latLng == null) return;
         currentLatLng = current;
-        drawMarker(current.latLng, LocationType.COMBINED);
+        drawMarker(current, LocationType.COMBINED);
         updateInfoViews(current.numberOfBeacons);
         if (firstUpdate) {
             centerOnLocation(this.btCountView);
@@ -155,22 +188,22 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
 
-    private void drawMarker(LatLng marker, LocationType locationType) {
+    private void drawMarker(LocationInfo locationInfo, LocationType locationType) {
         if (!isMapReady) return;
         //map.clear();
 
         switch (locationType) {
             case BLE:
-                map.addMarker(new MarkerOptions().position(marker).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
+                map.addMarker(new MarkerOptions().position(locationInfo.latLng).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
                 break;
             case GPS:
-                map.addMarker(new MarkerOptions().position(marker).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+                map.addMarker(new MarkerOptions().position(locationInfo.latLng).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
                 break;
             case COMBINED:
-                map.addMarker(new MarkerOptions().position(marker).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
+                map.addMarker(new MarkerOptions().position(locationInfo.latLng).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
                 break;
         }
-
+        logLocation(locationInfo, locationType);
     }
 
     @Override
@@ -203,6 +236,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
         proximityManager.stopScanning();
 
+        try {
+            logFileOutputStream.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
     }
 
     @Override
@@ -214,6 +253,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
         proximityManager.disconnect();
         proximityManager = null;
+
+        try {
+            logFileOutputStream.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
     }
 
@@ -267,14 +312,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (locationInfo == null) {
             Log.i(LOG_STRING, "no bluetooth positions");
             if (currentGpsPosition == null) Log.i(LOG_STRING, "No available positioning source");
-            drawMarker(currentGpsPosition, LocationType.GPS);
+            drawMarker(new LocationInfo(currentGpsPosition, 0), LocationType.GPS);
             updateInfoViews(0);
             return;
         }
         currentBtPosition = locationInfo.latLng;
         Log.i(LOG_STRING, "currentBtPosition bt position " + currentBtPosition.latitude + "," + currentBtPosition.longitude);
         updateInfoViews(locationInfo.numberOfBeacons);
-        drawMarker(currentBtPosition, LocationType.BLE);
+        drawMarker(locationInfo, LocationType.BLE);
     }
 
     private void updateInfoViews(int numOfBtDevices) {
@@ -313,7 +358,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             LatLng gpsLatLng = new LatLng(location.getLatitude(), location.getLongitude());
             locationStrengthMap.put(GPS_TAG, new LocationStrength(gpsLatLng, location.getAccuracy() * -1));
             locationUpdate();
-            drawMarker(new LatLng(location.getLatitude(), location.getLongitude()), LocationType.GPS);
+            drawMarker(new LocationInfo(gpsLatLng, 0), LocationType.GPS);
         }
 
         @Override
