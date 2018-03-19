@@ -106,7 +106,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         File logFile = new File(Environment.getExternalStorageDirectory(), fileName);
 
         try {
-            logFileOutputStream = openFileOutput(fileName, Context.MODE_APPEND);
+            logFileOutputStream = new FileOutputStream(logFile, true);
             Log.i(LOG_STRING, "File: " + logFile);
         } catch (FileNotFoundException e) {
             e.printStackTrace();
@@ -125,6 +125,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                     append(locationInfo.latLng.longitude + "").append("\n");
             logFileOutputStream.write(sb.toString().getBytes());
             logFileOutputStream.flush();
+            Log.i(LOG_STRING, "write to log file " + sb.toString());
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -238,12 +239,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         }
         proximityManager.stopScanning();
 
-        try {
-            logFileOutputStream.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
     }
 
     @Override
@@ -323,8 +318,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void updateInfoViews(int numOfBtDevices) {
-        if (numOfBtDevices == 0) currentlyUsingView.setText("Using GPS");
-        else currentlyUsingView.setText("Using Bluetooh");
+        currentlyUsingView.setText("Using");
         btCountView.setText(numOfBtDevices + " devices");
     }
 
