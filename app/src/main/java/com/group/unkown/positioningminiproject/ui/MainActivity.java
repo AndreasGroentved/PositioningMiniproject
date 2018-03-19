@@ -8,12 +8,14 @@ import android.content.pm.PackageManager;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
+import android.location.LocationProvider;
 import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.View;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -39,33 +41,37 @@ import com.kontakt.sdk.android.common.profile.IEddystoneNamespace;
 
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
-import Model.Beacon;
-import Model.BuildingModel;
+import com.group.unkown.positioningminiproject.model.Beacon;
+import com.group.unkown.positioningminiproject.model.BuildingModel;
 
 public class MainActivity extends AppCompatActivity implements OnMapReadyCallback {
+
+    private static final int REQUEST_INTERNET = 200;
+    private static final int MY_PERMISSIONS_REQUEST_LOCATION = 99;
+    private static final int REQUEST_ENABLE_BT = 1;
+    private static final float ZOOM_LEVEL = 16f;
+    private static final String GPS_TAG = "GPS";
 
     private GoogleMap map;
     private boolean isMapReady = false;
     private ProximityManager proximityManager;
-    private static final int REQUEST_INTERNET = 200;
-    public static final int MY_PERMISSIONS_REQUEST_LOCATION = 99;
-    private static final int REQUEST_ENABLE_BT = 1;
-    private LocationManager lm;
+    private LocationManager mLocationManager;
     private LocationHandler mLocationHandler;
-    private List<LocationStrength> mLocationStrengths;
-    private LatLng current;
+    private LatLng currentLatLng;
+
+    private Map<String, LocationStrength> locationStrengthMap;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        mLocationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
         mLocationHandler = new LocationHandler();
-        mLocationStrengths = new ArrayList<>();
+        locationStrengthMap = new HashMap<>();
         InputStream ins = getResources().openRawResource(getResources().getIdentifier("beacons", "raw", getPackageName()));
-
         new BuildingModel(ins);
-
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
@@ -118,7 +124,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 })
                 .create()
                 .show();
-
     }
 
     private void startKontakting() {
@@ -136,18 +141,23 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         startScanning();
     }
 
+    private void locationUpdate() {
+        if (locationStrengthMap.size() < 1) return;
+        currentLatLng = mLocationHandler.getNearestNeighbor(new ArrayList<>(locationStrengthMap.values()));
+        Log.i("sup", "current position " + currentLatLng.latitude + "," + currentLatLng.longitude);
+        drawMarker(currentLatLng);
+    }
 
-    private void centerOnLocation(LatLng latLng) {
-        if (latLng == null || !isMapReady) return;
-        float zoomLevel =/* map.getCameraPosition().zoom;*/ 19f;
+    public void centerOnLocation(View view) {
+        if (currentLatLng == null || !isMapReady) return;
         
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoomLevel));
+        map.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, ZOOM_LEVEL));
     }
 
 
     private void drawMarker(LatLng marker) {
         if (!isMapReady) return;
-      /*  map.clear();*/
+        map.clear();
         map.addMarker(new MarkerOptions().position(marker));
     }
 
@@ -156,7 +166,6 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         map = googleMap;
         isMapReady = true;
     }
-
 
     @Override
     protected void onStart() {
@@ -212,18 +221,14 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
                 Log.i("Sample", "IBeacon discovered: " + ibeacon.getUniqueId());
 
                 Beacon beacon = BuildingModel.getBeacon(ibeacon.getUniqueId());
-                Log.i("found", "" + (BuildingModel.getBeacon(ibeacon.getUniqueId()) != null));
+                Log.i("found", "" + beacon);
                 if (beacon == null) return;
+                if (beacon.getLatitude() == 0.0d || beacon.getLongitude() == 0.0d) return;
                 LocationStrength locationStrength = new LocationStrength(new LatLng(beacon.getLatitude(), beacon.getLongitude()), (float) ibeacon.getRssi());
 
-                synchronized (this) {
-                    mLocationStrengths.add(locationStrength);
-                }
+                locationStrengthMap.put(ibeacon.getUniqueId(), locationStrength);
 
-                current = mLocationHandler.getNearestNeighbor(mLocationStrengths);
-                Log.i("sup", "current bt position " + current.latitude + "," + current.longitude);
-                centerOnLocation(current);
-                drawMarker(current);
+                locationUpdate();
             }
 
             @Override
@@ -232,13 +237,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
                 Beacon beacon = BuildingModel.getBeacon(ibeacon.getUniqueId());
                 if (beacon == null) return;
-                LocationStrength locationStrength = new LocationStrength(new LatLng(beacon.getLatitude(), beacon.getLongitude()), (float) ibeacon.getRssi());
 
-                synchronized (this) {
-                    mLocationStrengths.remove(locationStrength);
-                }
+                locationStrengthMap.remove(ibeacon.getUniqueId());
 
-                current = mLocationHandler.getNearestNeighbor(mLocationStrengths);
+                locationUpdate();
             }
         };
     }
@@ -253,31 +255,39 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
 
-    private final LocationListener ll = new LocationListener() {
-
+    private final LocationListener locationListener = new LocationListener() {
 
         @Override
         public void onLocationChanged(Location location) {
-            current = new LatLng(location.getLatitude(), location.getLongitude());
+            LatLng gpsLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+            locationStrengthMap.put(GPS_TAG, new LocationStrength(gpsLatLng, location.getAccuracy() * -1));
+            locationUpdate();
         }
-
 
         @Override
         public void onStatusChanged(String s, int i, Bundle bundle) {
+            switch (i) {
+                case LocationProvider.OUT_OF_SERVICE:
+                case LocationProvider.TEMPORARILY_UNAVAILABLE:
+                    locationStrengthMap.remove(GPS_TAG);
+                    locationUpdate();
+            }
         }
 
         @Override
         public void onProviderEnabled(String s) {
+
         }
 
         @Override
         public void onProviderDisabled(String s) {
+
         }
+
     };
 
-
     protected boolean pickGps() {
-        return lm.isProviderEnabled(LocationManager.GPS_PROVIDER) || lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
+        return mLocationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) || mLocationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
     }
 
     protected boolean check() {
@@ -293,12 +303,13 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         if (!check()) {
             return;
         }
-        Location l = lm.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-        if (l != null) {
-            current = new LatLng(l.getLatitude(), l.getLongitude());
+        Location location = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+
+        if (location != null) {
+            currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
         }
 
-        lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, ll);
+        mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
     }
 }
 

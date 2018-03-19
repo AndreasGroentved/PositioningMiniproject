@@ -27,7 +27,7 @@ public final class LocationHandler {
         if (dbs.isEmpty()) return null;
 
         Collections.sort(dbs, locationStrengthSorter);
-        if (dbs.size() <= n) n = dbs.size() - 1;
+        if (dbs.size() <= n) n = dbs.size();
         List<LocationStrength> nearest = dbs.subList(0, n);
 
         double sumLat = 0;

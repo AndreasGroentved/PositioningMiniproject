@@ -1,4 +1,4 @@
-package Model;
+package com.group.unkown.positioningminiproject.model;
 
 /**
  * Created by Arpad on 3/13/2018.

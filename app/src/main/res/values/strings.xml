@@ -1,5 +1,5 @@
 <resources>
     <string name="app_name">Positioning</string>
-    <string name="btn_scan_name">Scan</string>
+    <string name="btn_center_name">Center</string>
     <string name="kontakt_io_api_key">NrgECdDetDAVLKTCeCBgDSvlVHGTjQKO</string>
 </resources>
