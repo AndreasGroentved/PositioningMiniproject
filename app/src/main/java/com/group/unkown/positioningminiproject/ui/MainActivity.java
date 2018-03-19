@@ -16,15 +16,18 @@ import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.View;
+import android.widget.TextView;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.group.unkown.positioningminiproject.R;
 import com.group.unkown.positioningminiproject.domain.LocationHandler;
+import com.group.unkown.positioningminiproject.domain.LocationInfo;
 import com.group.unkown.positioningminiproject.domain.LocationStrength;
 import com.kontakt.sdk.android.ble.connection.OnServiceReadyListener;
 import com.kontakt.sdk.android.ble.manager.ProximityManager;
@@ -32,7 +35,6 @@ import com.kontakt.sdk.android.ble.manager.ProximityManagerFactory;
 import com.kontakt.sdk.android.ble.manager.listeners.EddystoneListener;
 import com.kontakt.sdk.android.ble.manager.listeners.IBeaconListener;
 import com.kontakt.sdk.android.ble.manager.listeners.simple.SimpleEddystoneListener;
-import com.kontakt.sdk.android.ble.manager.listeners.simple.SimpleIBeaconListener;
 import com.kontakt.sdk.android.common.KontaktSDK;
 import com.kontakt.sdk.android.common.profile.IBeaconDevice;
 import com.kontakt.sdk.android.common.profile.IBeaconRegion;
@@ -51,19 +53,30 @@ import com.group.unkown.positioningminiproject.model.BuildingModel;
 public class MainActivity extends AppCompatActivity implements OnMapReadyCallback {
 
     private static final int REQUEST_INTERNET = 200;
-    private static final int MY_PERMISSIONS_REQUEST_LOCATION = 99;
-    private static final int REQUEST_ENABLE_BT = 1;
-    private static final float ZOOM_LEVEL = 16f;
+    private static final int REQUEST_LOCATION = 99;
+    private static final int REQUEST_BT = 1;
+    private static final float DEFAULT_ZOOM_LEVEL = 16f;
     private static final String GPS_TAG = "GPS";
 
+    private enum LocationType {
+        GPS, BLE, COMBINED
+    };
+
     private GoogleMap map;
+    private static final String LOG_STRING = "Positioning";
     private boolean isMapReady = false;
     private ProximityManager proximityManager;
     private LocationManager mLocationManager;
     private LocationHandler mLocationHandler;
-    private LatLng currentLatLng;
+    private LocationInfo currentLatLng;
+    private LatLng currentBtPosition;
+    private LatLng currentGpsPosition;
+    private TextView btCountView;
+    private TextView currentlyUsingView;
+    private boolean firstUpdate = true;
 
     private Map<String, LocationStrength> locationStrengthMap;
+    private List<LocationStrength> locationStrengths;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -76,49 +89,29 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         setContentView(R.layout.activity_main);
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+        btCountView = findViewById(R.id.number_of_bluetooth_beacons);
+        currentlyUsingView = findViewById(R.id.currently_using);
 
+        if (!permissionsGranted()) askPermissions();
+
+    }
+
+    private void askPermissions() {
+        makePermissionDialog(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_LOCATION);
+        makePermissionDialog(new String[]{Manifest.permission.INTERNET}, REQUEST_INTERNET);
+        makePermissionDialog(new String[]{Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN}, REQUEST_BT);
+    }
+
+    private void makePermissionDialog(final String[] permissionStringArray, final int somePermissionInt) {
         new AlertDialog.Builder(this)
                 .setTitle("Title")
                 .setMessage("sup?")
                 .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface dialogInterface, int i) {
-                        //Prompt the user once explanation has been shown
                         ActivityCompat.requestPermissions(MainActivity.this,
-                                new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                                MY_PERMISSIONS_REQUEST_LOCATION);
-                        startKontakting();
-                    }
-                })
-                .create()
-                .show();
-
-
-        new AlertDialog.Builder(this)
-                .setTitle("Title")
-                .setMessage("sup?")
-                .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialogInterface, int i) {
-                        //Prompt the user once explanation has been shown
-                        ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.INTERNET}, REQUEST_INTERNET
-                        );
-                        startKontakting();
-                    }
-                })
-                .create()
-                .show();
-
-        new AlertDialog.Builder(this)
-                .setTitle("Title")
-                .setMessage("sup?")
-                .setPositiveButton("Ok", new DialogInterface.OnClickListener() {
-                    @Override
-                    public void onClick(DialogInterface dialogInterface, int i) {
-                        //Prompt the user once explanation has been shown
-                        ActivityCompat.requestPermissions(MainActivity.this,
-                                new String[]{Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN},
-                                REQUEST_ENABLE_BT);
+                                permissionStringArray,
+                                somePermissionInt);
                         startKontakting();
                     }
                 })
@@ -128,10 +121,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private void startKontakting() {
         if (!permissionsGranted()) {
-            Log.i("sup", "permissions failed ");
+            Log.i(LOG_STRING, "permissions failed ");
             return;
         }
-        Log.i("sup", "permissions enabled");
+        Log.i(LOG_STRING, "permissions enabled");
         KontaktSDK.initialize(this);
 
         listen();
@@ -143,22 +136,41 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     private void locationUpdate() {
         if (locationStrengthMap.size() < 1) return;
-        currentLatLng = mLocationHandler.getNearestNeighbor(new ArrayList<>(locationStrengthMap.values()));
-        Log.i("sup", "current position " + currentLatLng.latitude + "," + currentLatLng.longitude);
-        drawMarker(currentLatLng);
+        LocationInfo current = mLocationHandler.getNearestNeighbor(new ArrayList<>(locationStrengthMap.values()));
+        if (current.latLng == null) return;
+        currentLatLng = current;
+        drawMarker(current.latLng, LocationType.COMBINED);
+        updateInfoViews(current.numberOfBeacons);
+        if (firstUpdate) {
+            centerOnLocation(this.btCountView);
+            map.moveCamera(CameraUpdateFactory.newLatLngZoom(current.latLng, DEFAULT_ZOOM_LEVEL));
+            firstUpdate = false;
+        }
     }
 
     public void centerOnLocation(View view) {
         if (currentLatLng == null || !isMapReady) return;
-        
-        map.moveCamera(CameraUpdateFactory.newLatLngZoom(currentLatLng, ZOOM_LEVEL));
+
+        map.moveCamera(CameraUpdateFactory.newLatLng(currentLatLng.latLng));
     }
 
 
-    private void drawMarker(LatLng marker) {
+    private void drawMarker(LatLng marker, LocationType locationType) {
         if (!isMapReady) return;
-        map.clear();
-        map.addMarker(new MarkerOptions().position(marker));
+        //map.clear();
+
+        switch (locationType) {
+            case BLE:
+                map.addMarker(new MarkerOptions().position(marker).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_BLUE)));
+                break;
+            case GPS:
+                map.addMarker(new MarkerOptions().position(marker).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE)));
+                break;
+            case COMBINED:
+                map.addMarker(new MarkerOptions().position(marker).icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_VIOLET)));
+                break;
+        }
+
     }
 
     @Override
@@ -215,45 +227,84 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private IBeaconListener createIBeaconListener() {
-        return new SimpleIBeaconListener() {
+
+        return new IBeaconListener() {
             @Override
             public void onIBeaconDiscovered(IBeaconDevice ibeacon, IBeaconRegion region) {
-                Log.i("Sample", "IBeacon discovered: " + ibeacon.getUniqueId());
+                Log.i(LOG_STRING, "IBeacon discovered: " + ibeacon.getUniqueId());
+                Log.i(LOG_STRING, "" + (BuildingModel.getBeacon(ibeacon.getUniqueId()) != null));
+            }
 
-                Beacon beacon = BuildingModel.getBeacon(ibeacon.getUniqueId());
-                Log.i("found", "" + beacon);
-                if (beacon == null) return;
-                if (beacon.getLatitude() == 0.0d || beacon.getLongitude() == 0.0d) return;
-                LocationStrength locationStrength = new LocationStrength(new LatLng(beacon.getLatitude(), beacon.getLongitude()), (float) ibeacon.getRssi());
-
-                locationStrengthMap.put(ibeacon.getUniqueId(), locationStrength);
-
-                locationUpdate();
+            @Override
+            public void onIBeaconsUpdated(List<IBeaconDevice> iBeacons, IBeaconRegion region) {
+                updateBtLocations(iBeacons);
             }
 
             @Override
             public void onIBeaconLost(IBeaconDevice ibeacon, IBeaconRegion region) {
-                Log.i("Sample", "IBeacon lost: " + ibeacon.toString());
-
+                Log.i(LOG_STRING, "IBeacon lost: " + ibeacon.toString());
                 Beacon beacon = BuildingModel.getBeacon(ibeacon.getUniqueId());
                 if (beacon == null) return;
-
                 locationStrengthMap.remove(ibeacon.getUniqueId());
-
-                locationUpdate();
             }
         };
+    }
+                
+    private void updateBtLocations(List<IBeaconDevice> iBeacons) {
+        List<LocationStrength> beacons = new ArrayList<>();
+        for (IBeaconDevice iBeaconDevice : iBeacons) {
+            Beacon beacon = BuildingModel.getBeacon(iBeaconDevice.getUniqueId());
+            if (beacon != null) {
+                LocationStrength locationStrength = new LocationStrength(new LatLng(beacon.getLatitude(), beacon.getLongitude()), (float) iBeaconDevice.getRssi());
+                beacons.add(locationStrength);
+                locationStrengthMap.put(iBeaconDevice.getUniqueId(), locationStrength);
+                locationUpdate();
+            }
+        }
+
+        LocationInfo locationInfo = mLocationHandler.getNearestNeighbor(beacons);
+
+        if (locationInfo == null) {
+            Log.i(LOG_STRING, "no bluetooth positions");
+            if (currentGpsPosition == null) Log.i(LOG_STRING, "No available positioning source");
+            drawMarker(currentGpsPosition, LocationType.GPS);
+            updateInfoViews(0);
+            return;
+        }
+        currentBtPosition = locationInfo.latLng;
+        Log.i(LOG_STRING, "currentBtPosition bt position " + currentBtPosition.latitude + "," + currentBtPosition.longitude);
+        updateInfoViews(locationInfo.numberOfBeacons);
+        drawMarker(currentBtPosition, LocationType.BLE);
+    }
+
+    private void updateInfoViews(int numOfBtDevices) {
+        if (numOfBtDevices == 0) currentlyUsingView.setText("Using GPS");
+        else currentlyUsingView.setText("Using Bluetooh");
+        btCountView.setText(numOfBtDevices + " devices");
+    }
+
+    private void removeBeacon(double latitude, double longitude) {
+        int removeIndex = -1;
+        for (int i = 0; i < locationStrengths.size(); i++) {
+            if (locationStrengths.get(i).latLng.longitude == longitude && locationStrengths.get(i).latLng.latitude == latitude) {
+                removeIndex = i;
+                break;
+            }
+        }
+        if (removeIndex != -1) {
+            Log.i(LOG_STRING, "beacon removed");
+            locationStrengths.remove(removeIndex);
+        }
     }
 
     private EddystoneListener createEddystoneListener() {
         return new SimpleEddystoneListener() {
             @Override
             public void onEddystoneDiscovered(IEddystoneDevice eddystone, IEddystoneNamespace namespace) {
-                Log.i("Sample", "Eddystone discovered: " + eddystone.toString());
+                Log.i(LOG_STRING, "Eddystone discovered: " + eddystone.toString());
             }
         };
     }
-
 
     private final LocationListener locationListener = new LocationListener() {
 
@@ -262,6 +313,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
             LatLng gpsLatLng = new LatLng(location.getLatitude(), location.getLongitude());
             locationStrengthMap.put(GPS_TAG, new LocationStrength(gpsLatLng, location.getAccuracy() * -1));
             locationUpdate();
+            drawMarker(new LatLng(location.getLatitude(), location.getLongitude()), LocationType.GPS);
         }
 
         @Override
@@ -292,7 +344,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
     protected boolean check() {
         if (!pickGps()) {
-            Log.i("sup", "GPS not available");
+            Log.i(LOG_STRING, "GPS not available");
         }
         return pickGps();
     }
@@ -306,7 +358,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         Location location = mLocationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
 
         if (location != null) {
-            currentLatLng = new LatLng(location.getLatitude(), location.getLongitude());
+            currentGpsPosition = new LatLng(location.getLatitude(), location.getLongitude());
         }
 
         mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
