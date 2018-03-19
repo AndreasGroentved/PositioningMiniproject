@@ -107,12 +107,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         try {
             logFileOutputStream = new FileOutputStream(logFile, true);
-            Log.i(LOG_STRING, logFile.getCanonicalPath());
         } catch (FileNotFoundException e) {
             e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
         }
+
 
         if (!permissionsGranted()) askPermissions();
 
@@ -132,6 +130,7 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private void askPermissions() {
+        makePermissionDialog(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
         makePermissionDialog(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_LOCATION);
         makePermissionDialog(new String[]{Manifest.permission.INTERNET}, REQUEST_INTERNET);
         makePermissionDialog(new String[]{Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN}, REQUEST_BT);
@@ -224,10 +223,10 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
     }
 
     private boolean permissionsGranted() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN)
-                == PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-                == PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(this, Manifest.permission.INTERNET)
-                == PackageManager.PERMISSION_GRANTED;
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_ADMIN) == PackageManager.PERMISSION_GRANTED
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                && ContextCompat.checkSelfPermission(this, Manifest.permission.INTERNET) == PackageManager.PERMISSION_GRANTED;
     }
 
     @Override
@@ -411,6 +410,3 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
         mLocationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
     }
 }
-
-
-
