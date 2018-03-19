@@ -107,10 +107,12 @@ public class MainActivity extends AppCompatActivity implements OnMapReadyCallbac
 
         try {
             logFileOutputStream = new FileOutputStream(logFile, true);
+            Log.i(LOG_STRING, logFile.getCanonicalPath());
         } catch (FileNotFoundException e) {
             e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-
 
         if (!permissionsGranted()) askPermissions();
 
